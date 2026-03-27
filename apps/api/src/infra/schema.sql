@@ -1,21 +1,11 @@
--- Sprite Generator — PostgreSQL schema
+-- Sprite Generator — PostgreSQL schema (no authentication, single-user)
 -- Run once to initialize the database.
 
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
--- ─── Users ────────────────────────────────────────────────────────────────────
-CREATE TABLE IF NOT EXISTS users (
-  id          UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  email       TEXT UNIQUE NOT NULL,
-  password_hash TEXT NOT NULL,
-  created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
 -- ─── Projects ─────────────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS projects (
   id                   UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  user_id              UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   name                 TEXT NOT NULL,
   engine_target        TEXT NOT NULL CHECK (engine_target IN ('godot', 'unity', 'generic')),
   default_cell_width   INTEGER NOT NULL DEFAULT 32,
@@ -26,8 +16,6 @@ CREATE TABLE IF NOT EXISTS projects (
   created_at           TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at           TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
-
-CREATE INDEX IF NOT EXISTS idx_projects_user_id ON projects(user_id);
 
 -- ─── Assets ───────────────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS assets (

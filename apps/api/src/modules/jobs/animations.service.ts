@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, ForbiddenException } from "@nestjs/common";
+import { Injectable, NotFoundException } from "@nestjs/common";
 import { DatabaseService } from "../../infra/database.service.js";
 import { ProjectsService } from "../projects/projects.service.js";
 import type { Animation, CreateAnimationInput, UpdateAnimationInput } from "@sprite-generator/shared-types";
@@ -32,8 +32,8 @@ export class AnimationsService {
     private readonly projects: ProjectsService,
   ) {}
 
-  async create(userId: string, input: CreateAnimationInput): Promise<Animation> {
-    await this.projects.findById(input.projectId, userId);
+  async create(input: CreateAnimationInput): Promise<Animation> {
+    await this.projects.findById(input.projectId);
 
     const row = await this.db.queryOne<AnimationRow>(
       `INSERT INTO animations (project_id, name, fps, loop, frame_ids)
@@ -43,8 +43,8 @@ export class AnimationsService {
     return toAnimation(row!);
   }
 
-  async update(id: string, userId: string, input: UpdateAnimationInput): Promise<Animation> {
-    const animation = await this.findById(id, userId);
+  async update(id: string, input: UpdateAnimationInput): Promise<Animation> {
+    const animation = await this.findById(id);
 
     const sets: string[] = [];
     const vals: unknown[] = [];
@@ -65,18 +65,17 @@ export class AnimationsService {
     return toAnimation(row!);
   }
 
-  async delete(id: string, userId: string): Promise<void> {
-    await this.findById(id, userId);
+  async delete(id: string): Promise<void> {
+    await this.findById(id);
     await this.db.query("DELETE FROM animations WHERE id = $1", [id]);
   }
 
-  async findById(id: string, userId: string): Promise<Animation> {
+  async findById(id: string): Promise<Animation> {
     const row = await this.db.queryOne<AnimationRow>(
       "SELECT * FROM animations WHERE id = $1",
       [id],
     );
     if (!row) throw new NotFoundException("Animation not found");
-    await this.projects.findById(row.project_id, userId); // ownership check
     return toAnimation(row);
   }
 }

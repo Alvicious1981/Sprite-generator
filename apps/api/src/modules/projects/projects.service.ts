@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, ForbiddenException } from "@nestjs/common";
+import { Injectable, NotFoundException } from "@nestjs/common";
 import { DatabaseService } from "../../infra/database.service.js";
 import type {
   Project,
@@ -9,7 +9,6 @@ import type {
 
 interface ProjectRow {
   id: string;
-  user_id: string;
   name: string;
   engine_target: string;
   default_cell_width: number;
@@ -24,7 +23,7 @@ interface ProjectRow {
 function toProject(row: ProjectRow): Project {
   return {
     id: row.id,
-    userId: row.user_id,
+    userId: "default",
     name: row.name,
     engineTarget: row.engine_target as Project["engineTarget"],
     defaultCellWidth: row.default_cell_width,
@@ -41,15 +40,14 @@ function toProject(row: ProjectRow): Project {
 export class ProjectsService {
   constructor(private readonly db: DatabaseService) {}
 
-  async create(userId: string, input: CreateProjectInput): Promise<Project> {
+  async create(input: CreateProjectInput): Promise<Project> {
     const row = await this.db.queryOne<ProjectRow>(
       `INSERT INTO projects
-         (user_id, name, engine_target, default_cell_width, default_cell_height,
+         (name, engine_target, default_cell_width, default_cell_height,
           style_preset, transparent_background, export_scale)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+       VALUES ($1,$2,$3,$4,$5,$6,$7)
        RETURNING *`,
       [
-        userId,
         input.name,
         input.engineTarget,
         input.defaultCellWidth,
@@ -62,26 +60,24 @@ export class ProjectsService {
     return toProject(row!);
   }
 
-  async findAllForUser(userId: string): Promise<Project[]> {
+  async findAll(): Promise<Project[]> {
     const rows = await this.db.query<ProjectRow>(
-      "SELECT * FROM projects WHERE user_id = $1 ORDER BY updated_at DESC",
-      [userId],
+      "SELECT * FROM projects ORDER BY updated_at DESC",
     );
     return rows.map(toProject);
   }
 
-  async findById(id: string, userId: string): Promise<Project> {
+  async findById(id: string): Promise<Project> {
     const row = await this.db.queryOne<ProjectRow>(
       "SELECT * FROM projects WHERE id = $1",
       [id],
     );
     if (!row) throw new NotFoundException("Project not found");
-    if (row.user_id !== userId) throw new ForbiddenException();
     return toProject(row);
   }
 
-  async update(id: string, userId: string, input: UpdateProjectInput): Promise<Project> {
-    await this.findById(id, userId); // ownership check
+  async update(id: string, input: UpdateProjectInput): Promise<Project> {
+    await this.findById(id);
 
     const sets: string[] = [];
     const vals: unknown[] = [];
@@ -104,7 +100,7 @@ export class ProjectsService {
       }
     }
 
-    if (sets.length === 0) return this.findById(id, userId);
+    if (sets.length === 0) return this.findById(id);
 
     sets.push(`updated_at = NOW()`);
     vals.push(id);
@@ -116,8 +112,8 @@ export class ProjectsService {
     return toProject(row!);
   }
 
-  async getFull(id: string, userId: string): Promise<ProjectFull> {
-    const project = await this.findById(id, userId);
+  async getFull(id: string): Promise<ProjectFull> {
+    const project = await this.findById(id);
 
     const [assets, animations, sheetRows] = await Promise.all([
       this.db.query(

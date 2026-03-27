@@ -1,7 +1,6 @@
 import { Injectable, NotFoundException } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { DatabaseService } from "../../infra/database.service.js";
-import { StorageService } from "../../infra/storage.service.js";
 import { ProjectsService } from "../projects/projects.service.js";
 import type { SheetLayout, ComposeSheetInput } from "@sprite-generator/shared-types";
 
@@ -34,21 +33,15 @@ function toSheetLayout(row: SheetLayoutRow): SheetLayout {
 
 @Injectable()
 export class SheetService {
-  private readonly workerUrl: string;
-
   constructor(
     private readonly db: DatabaseService,
-    private readonly storage: StorageService,
     private readonly projects: ProjectsService,
     private readonly config: ConfigService,
-  ) {
-    this.workerUrl = this.config.get("IMAGE_WORKER_URL", "http://localhost:8000");
-  }
+  ) {}
 
-  async compose(userId: string, input: ComposeSheetInput): Promise<SheetLayout> {
-    const project = await this.projects.findById(input.projectId, userId);
+  async compose(input: ComposeSheetInput): Promise<SheetLayout> {
+    await this.projects.findById(input.projectId);
 
-    // Save layout to DB (upsert)
     const row = await this.db.queryOne<SheetLayoutRow>(
       `INSERT INTO sheet_layouts
          (project_id, columns, rows, cell_width, cell_height, margin, padding, placements)
@@ -72,8 +65,8 @@ export class SheetService {
     return toSheetLayout(row!);
   }
 
-  async getPreview(projectId: string, userId: string): Promise<SheetLayout> {
-    await this.projects.findById(projectId, userId);
+  async getPreview(projectId: string): Promise<SheetLayout> {
+    await this.projects.findById(projectId);
     const row = await this.db.queryOne<SheetLayoutRow>(
       "SELECT * FROM sheet_layouts WHERE project_id = $1",
       [projectId],

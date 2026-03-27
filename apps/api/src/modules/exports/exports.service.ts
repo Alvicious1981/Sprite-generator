@@ -15,12 +15,9 @@ interface AnimationRow {
 interface SheetLayoutRow {
   id: string;
   columns: number;
-  rows: number;
   cell_width: number;
   cell_height: number;
-  margin: number;
-  padding: number;
-  placements: Array<{ assetId: string; row: number; col: number; pivotX?: number; pivotY?: number }>;
+  placements: Array<{ assetId: string; row: number; col: number }>;
 }
 
 interface ExportJobRow {
@@ -46,8 +43,8 @@ export class ExportsService {
     this.workerUrl = this.config.get("IMAGE_WORKER_URL", "http://localhost:8000");
   }
 
-  async buildGodotManifest(projectId: string, userId: string): Promise<GodotManifest> {
-    const project = await this.projects.findById(projectId, userId);
+  async buildGodotManifest(projectId: string): Promise<GodotManifest> {
+    const project = await this.projects.findById(projectId);
     const animations = await this.db.query<AnimationRow>(
       "SELECT * FROM animations WHERE project_id = $1",
       [projectId],
@@ -79,8 +76,8 @@ export class ExportsService {
     };
   }
 
-  async buildUnityManifest(projectId: string, userId: string): Promise<UnityManifest> {
-    const project = await this.projects.findById(projectId, userId);
+  async buildUnityManifest(projectId: string): Promise<UnityManifest> {
+    const project = await this.projects.findById(projectId);
     const animations = await this.db.query<AnimationRow>(
       "SELECT * FROM animations WHERE project_id = $1",
       [projectId],
@@ -105,15 +102,14 @@ export class ExportsService {
     };
   }
 
-  async createExportJob(projectId: string, userId: string, engine: string): Promise<ExportJobRow> {
-    await this.projects.findById(projectId, userId);
+  async createExportJob(projectId: string, engine: string): Promise<ExportJobRow> {
+    await this.projects.findById(projectId);
 
     const row = await this.db.queryOne<ExportJobRow>(
       `INSERT INTO export_jobs (project_id, engine) VALUES ($1, $2) RETURNING *`,
       [projectId, engine],
     );
 
-    // Trigger image worker asynchronously
     this.dispatchToWorker(row!.id, projectId, engine).catch((err) => {
       this.db.query(
         "UPDATE export_jobs SET status='failed', error=$1, updated_at=NOW() WHERE id=$2",
@@ -124,19 +120,14 @@ export class ExportsService {
     return row!;
   }
 
-  async getExportJob(projectId: string, userId: string): Promise<ExportJobRow | null> {
-    await this.projects.findById(projectId, userId);
+  async getExportJob(projectId: string): Promise<ExportJobRow | null> {
     return this.db.queryOne<ExportJobRow>(
       "SELECT * FROM export_jobs WHERE project_id=$1 ORDER BY created_at DESC LIMIT 1",
       [projectId],
     );
   }
 
-  private async dispatchToWorker(
-    jobId: string,
-    projectId: string,
-    engine: string,
-  ): Promise<void> {
+  private async dispatchToWorker(jobId: string, projectId: string, engine: string): Promise<void> {
     await this.db.query(
       "UPDATE export_jobs SET status='processing', updated_at=NOW() WHERE id=$1",
       [jobId],
@@ -148,9 +139,7 @@ export class ExportsService {
       body: JSON.stringify({ job_id: jobId, project_id: projectId, engine }),
     });
 
-    if (!response.ok) {
-      throw new Error(`Worker responded with ${response.status}`);
-    }
+    if (!response.ok) throw new Error(`Worker responded with ${response.status}`);
 
     const { result_url } = (await response.json()) as { result_url: string };
     await this.db.query(

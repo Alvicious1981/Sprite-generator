@@ -12,8 +12,8 @@ export class AiService {
     private readonly projects: ProjectsService,
   ) {}
 
-  async generateSprite(userId: string, input: GenerateSpriteInput): Promise<Asset> {
-    const project = await this.projects.findById(input.projectId, userId);
+  async generateSprite(input: GenerateSpriteInput): Promise<Asset> {
+    const project = await this.projects.findById(input.projectId);
 
     const size = input.size ?? {
       width: project.defaultCellWidth,
@@ -21,11 +21,11 @@ export class AiService {
     };
 
     const referenceImageUrl = input.referenceAssetId
-      ? (await this.assets.findById(input.referenceAssetId, userId)).imageUrl
+      ? (await this.assets.findById(input.referenceAssetId)).imageUrl
       : undefined;
 
     const baseImageUrl = input.baseAssetId
-      ? (await this.assets.findById(input.baseAssetId, userId)).imageUrl
+      ? (await this.assets.findById(input.baseAssetId)).imageUrl
       : undefined;
 
     const result = await this.gemini.generateSprite({
@@ -38,7 +38,6 @@ export class AiService {
     });
 
     return this.assets.saveGeneratedSprite(
-      userId,
       input.projectId,
       result.imageBase64,
       size.width,
@@ -49,18 +48,14 @@ export class AiService {
     );
   }
 
-  async generateVariant(
-    userId: string,
-    assetId: string,
-    input: GenerateVariantInput,
-  ): Promise<Asset> {
-    const baseAsset = await this.assets.findById(assetId, userId);
+  async generateVariant(assetId: string, input: GenerateVariantInput): Promise<Asset> {
+    const baseAsset = await this.assets.findById(assetId);
 
     const referenceImageUrl = input.referenceAssetId
-      ? (await this.assets.findById(input.referenceAssetId, userId)).imageUrl
+      ? (await this.assets.findById(input.referenceAssetId)).imageUrl
       : undefined;
 
-    const project = await this.projects.findById(baseAsset.projectId, userId);
+    const project = await this.projects.findById(baseAsset.projectId);
 
     const result = await this.gemini.generateSprite({
       prompt: input.prompt,
@@ -72,7 +67,6 @@ export class AiService {
     });
 
     return this.assets.saveGeneratedSprite(
-      userId,
       baseAsset.projectId,
       result.imageBase64,
       baseAsset.width,

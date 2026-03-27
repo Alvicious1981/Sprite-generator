@@ -20,6 +20,14 @@ export function useGenerateVariant(projectId: string) {
   });
 }
 
+export function useUploadReference(projectId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (file: File) => assetsApi.uploadReference(projectId, file),
+    onSuccess: () => qc.invalidateQueries({ queryKey: projectKeys.full(projectId) }),
+  });
+}
+
 export function useDeleteAsset(projectId: string) {
   const qc = useQueryClient();
   return useMutation({

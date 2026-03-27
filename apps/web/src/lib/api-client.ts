@@ -1,20 +1,14 @@
 const API_BASE = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:3001";
 
-function getToken(): string | null {
-  if (typeof window === "undefined") return null;
-  return localStorage.getItem("access_token");
-}
-
-async function request<T>(
-  path: string,
-  options: RequestInit = {},
-): Promise<T> {
-  const token = getToken();
+async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const headers: Record<string, string> = {
-    "Content-Type": "application/json",
     ...(options.headers as Record<string, string>),
   };
-  if (token) headers["Authorization"] = `Bearer ${token}`;
+
+  // Only set Content-Type for JSON bodies; let the browser set it for FormData
+  if (!(options.body instanceof FormData)) {
+    headers["Content-Type"] = "application/json";
+  }
 
   const res = await fetch(`${API_BASE}${path}`, { ...options, headers });
 
@@ -34,4 +28,6 @@ export const apiClient = {
   put: <T>(path: string, body: unknown) =>
     request<T>(path, { method: "PUT", body: JSON.stringify(body) }),
   delete: <T>(path: string) => request<T>(path, { method: "DELETE" }),
+  upload: <T>(path: string, formData: FormData) =>
+    request<T>(path, { method: "POST", body: formData }),
 };

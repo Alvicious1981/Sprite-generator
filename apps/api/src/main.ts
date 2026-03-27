@@ -6,6 +6,7 @@ import {
 } from "@nestjs/platform-fastify";
 import { ValidationPipe, Logger } from "@nestjs/common";
 import { SwaggerModule, DocumentBuilder } from "@nestjs/swagger";
+import multipart from "@fastify/multipart";
 import { AppModule } from "./app.module.js";
 
 async function bootstrap() {
@@ -15,6 +16,9 @@ async function bootstrap() {
     AppModule,
     new FastifyAdapter({ logger: false }),
   );
+
+  // Multipart support for file uploads
+  await app.register(multipart, { limits: { fileSize: 10 * 1024 * 1024 } }); // 10 MB
 
   // Global validation pipe
   app.useGlobalPipes(
@@ -36,7 +40,6 @@ async function bootstrap() {
     .setTitle("Sprite Generator API")
     .setDescription("API for AI-powered sprite sheet generation")
     .setVersion("1.0")
-    .addBearerAuth()
     .build();
   const document = SwaggerModule.createDocument(app, swaggerConfig);
   SwaggerModule.setup("docs", app, document);
