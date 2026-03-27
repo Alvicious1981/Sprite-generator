@@ -95,7 +95,8 @@ export class AssetsService {
   async delete(id: string): Promise<void> {
     const asset = await this.findById(id);
     await this.db.query("DELETE FROM assets WHERE id = $1", [id]);
-    const key = asset.imageUrl.split("/").slice(3).join("/");
+    // Extract the storage key by stripping the /uploads/ prefix from the URL path
+    const key = new URL(asset.imageUrl).pathname.replace(/^\/uploads\//, "");
     await this.storage.delete(key);
   }
 }

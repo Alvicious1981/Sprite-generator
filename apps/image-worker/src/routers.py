@@ -8,6 +8,7 @@ from .normalize import normalize_to_cell
 from .trim_alpha import trim_transparency
 from .export_zip import build_export_zip
 from .storage import upload_bytes, get_public_url
+from .settings import settings
 
 compose_router = APIRouter()
 
@@ -60,6 +61,11 @@ async def compose(req: CompositionRequest) -> CompositionResult:
                     Image.new("RGBA", (req.cell_width, req.cell_height), (0, 0, 0, 0))
                 )
                 continue
+            # Rewrite public URL → internal API URL for inter-container access.
+            # In Docker, PUBLIC_URL=http://localhost:3001 is unreachable from this
+            # container; API_BASE_URL=http://api:3001 is the internal address.
+            if settings.public_url and settings.api_base_url != settings.public_url:
+                url = url.replace(settings.public_url, settings.api_base_url, 1)
             resp = await client.get(url)
             if resp.status_code != 200:
                 raise HTTPException(status_code=502, detail=f"Failed to fetch frame: {url}")
