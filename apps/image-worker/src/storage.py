@@ -1,32 +1,45 @@
 """
-storage — Thin async wrapper for S3-compatible object storage.
+storage — Write files to local disk or S3-compatible storage.
 
-Replace the body of `upload_bytes` with the real boto3 / aioboto3 / httpx-based
-call for your storage provider (AWS S3, Cloudflare R2, MinIO, etc.).
+Controlled by the STORAGE_MODE env var:
+  local  → writes bytes to UPLOADS_DIR, returns PUBLIC_URL/uploads/<key>
+  s3     → (TODO) boto3/aioboto3 upload
 """
 
+import os
 from .settings import settings
 
 
 async def upload_bytes(key: str, data: bytes, content_type: str) -> str:
     """
-    Upload raw bytes to the configured storage bucket.
+    Persist raw bytes and return the public URL for the stored object.
 
     Args:
-        key:          Object key (path inside the bucket).
-        data:         Raw bytes to upload.
-        content_type: MIME type (e.g. 'image/png', 'application/zip').
+        key:          Storage key / relative path (e.g. 'projects/uuid/sprites/uuid.png').
+        data:         Raw bytes to store.
+        content_type: MIME type (informational; used by S3 mode).
 
     Returns:
-        The public URL of the uploaded object.
-
-    TODO: replace stub with real S3/R2 SDK upload.
+        Public URL string.
     """
-    # STUB — log and return the expected public URL without actually uploading
-    print(f"[storage] upload_bytes key={key} size={len(data)} content_type={content_type}")
-    return get_public_url(key)
+    if settings.storage_mode == "local":
+        return _write_local(key, data)
+
+    # TODO: replace with real boto3/aioboto3 call
+    print(f"[storage] S3 not implemented — falling back to local for key={key}")
+    return _write_local(key, data)
 
 
 def get_public_url(key: str) -> str:
     """Return the public URL for a given storage key."""
-    return f"{settings.storage_endpoint}/{settings.storage_bucket}/{key}"
+    return f"{settings.public_url}/uploads/{key}"
+
+
+def _write_local(key: str, data: bytes) -> str:
+    full_path = os.path.join(settings.uploads_dir, key)
+    os.makedirs(os.path.dirname(full_path), exist_ok=True)
+    with open(full_path, "wb") as f:
+        f.write(data)
+    url = get_public_url(key)
+    print(f"[storage] saved {key} ({len(data)} bytes) → {url}")
+    return url

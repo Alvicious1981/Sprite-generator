@@ -7,6 +7,9 @@ import {
 import { ValidationPipe, Logger } from "@nestjs/common";
 import { SwaggerModule, DocumentBuilder } from "@nestjs/swagger";
 import multipart from "@fastify/multipart";
+import fastifyStatic from "@fastify/static";
+import * as path from "path";
+import * as fs from "fs";
 import { AppModule } from "./app.module.js";
 
 async function bootstrap() {
@@ -17,8 +20,17 @@ async function bootstrap() {
     new FastifyAdapter({ logger: false }),
   );
 
-  // Multipart support for file uploads
-  await app.register(multipart, { limits: { fileSize: 10 * 1024 * 1024 } }); // 10 MB
+  // Multipart support for file uploads (10 MB limit)
+  await app.register(multipart, { limits: { fileSize: 10 * 1024 * 1024 } });
+
+  // Serve uploaded files as static assets
+  const uploadsDir = process.env["UPLOADS_DIR"] ?? path.join(process.cwd(), "uploads");
+  fs.mkdirSync(uploadsDir, { recursive: true });
+  await app.register(fastifyStatic, {
+    root: uploadsDir,
+    prefix: "/uploads/",
+    decorateReply: false,
+  });
 
   // Global validation pipe
   app.useGlobalPipes(
@@ -47,6 +59,7 @@ async function bootstrap() {
   const port = process.env["PORT"] ?? 3001;
   await app.listen(port, "0.0.0.0");
   logger.log(`API running on http://localhost:${port}`);
+  logger.log(`Uploads served from ${uploadsDir} at /uploads/`);
   logger.log(`Swagger docs at http://localhost:${port}/docs`);
 }
 

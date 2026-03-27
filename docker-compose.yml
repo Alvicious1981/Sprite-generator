@@ -1,0 +1,86 @@
+# Production Docker Compose — full stack.
+#
+# Required env vars (set in a .env file at the repo root or export them):
+#   GEMINI_API_KEY=...
+#
+# Usage:
+#   docker-compose up --build          # first run
+#   docker-compose up -d               # subsequent runs
+#   docker-compose down -v             # stop and remove volumes
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: sprite_generator
+      POSTGRES_USER: sprite
+      POSTGRES_PASSWORD: sprite
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./apps/api/src/infra/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sprite -d sprite_generator"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    restart: unless-stopped
+    ports:
+      - "3001:3001"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      PORT: "3001"
+      NODE_ENV: production
+      DATABASE_URL: postgresql://sprite:sprite@postgres:5432/sprite_generator
+      STORAGE_MODE: local
+      UPLOADS_DIR: /app/uploads
+      PUBLIC_URL: http://localhost:3001
+      GEMINI_API_KEY: ${GEMINI_API_KEY}
+      GEMINI_IMAGE_MODEL: ${GEMINI_IMAGE_MODEL:-gemini-2.5-flash-image}
+      GEMINI_TEXT_MODEL: ${GEMINI_TEXT_MODEL:-gemini-2.5-flash}
+      IMAGE_WORKER_URL: http://image-worker:8000
+      CORS_ORIGIN: http://localhost:3000
+    volumes:
+      - uploads:/app/uploads
+
+  image-worker:
+    build:
+      context: .
+      dockerfile: apps/image-worker/Dockerfile
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      PORT: "8000"
+      STORAGE_MODE: local
+      UPLOADS_DIR: /app/uploads
+      PUBLIC_URL: http://localhost:3001
+      API_BASE_URL: http://api:3001
+    volumes:
+      - uploads:/app/uploads
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    depends_on:
+      - api
+    environment:
+      NODE_ENV: production
+      PORT: "3000"
+      HOSTNAME: "0.0.0.0"
+      NEXT_PUBLIC_API_URL: http://localhost:3001
+
+volumes:
+  postgres_data:
+  uploads:
